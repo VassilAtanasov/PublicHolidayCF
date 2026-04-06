@@ -3,7 +3,30 @@ export const runtime = "edge";
 const MODEL = "@cf/meta/llama-3.1-8b-instruct-fp8-fast";
 
 export async function POST(request: Request) {
-  const { date } = await request.json();
+  let date: string;
+  try {
+    const body = await request.json();
+    date = body?.date;
+  } catch {
+    return Response.json({ error: "Invalid request body." }, { status: 400 });
+  }
+
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return Response.json(
+      { error: "Missing or invalid date. Expected format: YYYY-MM-DD." },
+      { status: 400 }
+    );
+  }
+
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+
+  if (!accountId || !apiToken) {
+    return Response.json(
+      { error: "Server misconfiguration: missing Cloudflare credentials." },
+      { status: 500 }
+    );
+  }
 
   const formattedDate = new Date(date + "T12:00:00Z").toLocaleDateString(
     "en-US",
@@ -11,9 +34,6 @@ export async function POST(request: Request) {
   );
 
   const prompt = `Return a plain-text list (no other Markdown). List national public holidays (off work) on ${formattedDate} worldwide. Always put United States holidays first (if any). Verify it is a non-working day in the country. Group by holiday name with countries in parentheses, ordered by popularity. No explanations.`;
-
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-  const apiToken = process.env.CLOUDFLARE_API_TOKEN;
 
   try {
     const response = await fetch(
